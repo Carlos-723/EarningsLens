@@ -11,8 +11,10 @@ class ReportTest(unittest.TestCase):
         self.assertIn("metrics", result)
         self.assertIn("risks", result)
         self.assertIn("management_focus", result)
+        self.assertIn("investment_thesis", result)
         self.assertIn("analysis", result)
         self.assertGreaterEqual(len(result["metrics"]), 1)
+        self.assertIn(result["investment_thesis"]["stance"], {"偏正面", "中性观察", "偏谨慎"})
 
     def test_format_metric_table(self):
         rows = format_metric_table(
@@ -36,4 +38,3 @@ class ReportTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

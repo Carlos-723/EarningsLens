@@ -4,18 +4,21 @@ from dataclasses import asdict
 
 from .llm import generate_analysis
 from .metrics import Metric, detect_management_focus, detect_risk_points, extract_metrics
+from .thesis import build_investment_thesis, thesis_to_dict
 
 
 def analyze_filing(text: str) -> dict:
     metrics = extract_metrics(text)
     risks = detect_risk_points(text)
     focus = detect_management_focus(text)
-    analysis = generate_analysis(text, metrics, risks, focus)
+    thesis = build_investment_thesis(metrics, risks, focus)
+    analysis = generate_analysis(text, metrics, risks, focus, thesis)
 
     return {
         "metrics": [asdict(metric) for metric in metrics],
         "risks": risks,
         "management_focus": focus,
+        "investment_thesis": thesis_to_dict(thesis),
         "analysis": analysis,
     }
 
@@ -34,4 +37,3 @@ def format_metric_table(metrics: list[Metric] | list[dict]) -> list[dict]:
             }
         )
     return rows
-

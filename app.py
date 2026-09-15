@@ -52,6 +52,27 @@ with right:
             result = analyze_filing(text)
 
         metrics = result["metrics"]
+        thesis = result["investment_thesis"]
+        st.markdown("#### 股票研究观察")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("初步观点", thesis["stance"])
+        c2.metric("规则评分", thesis["score"])
+        c3.caption(thesis["one_line_view"])
+
+        bull_col, bear_col = st.columns(2)
+        with bull_col:
+            st.markdown("##### 看多因素")
+            for point in thesis["bullish_points"]:
+                st.markdown(f"- {point}")
+        with bear_col:
+            st.markdown("##### 看空因素")
+            for point in thesis["bearish_points"]:
+                st.markdown(f"- {point}")
+
+        with st.expander("下一步应该查什么"):
+            for question in thesis["follow_up_questions"]:
+                st.markdown(f"- {question}")
+
         if metrics:
             st.markdown("#### 核心财务指标")
             st.dataframe(pd.DataFrame(format_metric_table(metrics)), use_container_width=True, hide_index=True)

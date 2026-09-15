@@ -23,7 +23,14 @@ class MetricExtractionTest(unittest.TestCase):
         self.assertIn("研发投入与产品迭代", detect_management_focus(text))
         self.assertIn("市场拓展", detect_management_focus(text))
 
+    def test_negative_change_words_are_signed(self):
+        text = "归母净利润 14.32 亿元，同比下降 2.1%。经营活动现金流量净额 9.85 亿元，同比减少 12.3%。"
+        metrics = extract_metrics(text)
+        names = {item.name: item for item in metrics}
+
+        self.assertEqual(names["归母净利润"].yoy, "-2.1%")
+        self.assertEqual(names["经营活动现金流量净额"].yoy, "-12.3%")
+
 
 if __name__ == "__main__":
     unittest.main()
-

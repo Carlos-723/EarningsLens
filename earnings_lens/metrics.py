@@ -66,9 +66,23 @@ def _find_change(pattern: re.Pattern[str], sentence: str) -> str | None:
     if not match:
         return None
     raw = match.group("value")
-    if raw.startswith(("+", "-")):
-        return f"{raw}%"
-    return f"{raw}%"
+    value = _signed_change_value(raw, match.group(0))
+    return f"{value:g}%"
+
+
+def _signed_change_value(raw_value: str, context: str) -> float:
+    value = float(raw_value.replace("+", ""))
+    negative_words = ["下降", "下滑", "减少", "降低", "decline", "decrease", "down"]
+    positive_words = ["增长", "增加", "提升", "上升", "increase", "grow", "up"]
+    lower_context = context.lower()
+
+    if raw_value.startswith("-"):
+        return value
+    if any(word in lower_context for word in negative_words):
+        return -abs(value)
+    if any(word in lower_context for word in positive_words):
+        return abs(value)
+    return value
 
 
 def extract_metrics(text: str) -> list[Metric]:

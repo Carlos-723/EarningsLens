@@ -30,7 +30,7 @@ def _list_text(items: list[str]) -> str:
 
 def _thesis_text(thesis: InvestmentThesis) -> str:
     return f"""
-初步观点：{thesis.stance}（评分 {thesis.score}）
+初步观点：{thesis.stance}（规则信号分 {thesis.score}，数据完整度 {thesis.data_completeness}%）
 一句话判断：{thesis.one_line_view}
 看多因素：
 {_list_text(thesis.bullish_points)}
@@ -92,23 +92,33 @@ def mock_completion(metrics: list[Metric], risks: list[str], focus: list[str], t
 """.strip()
 
 
-def generate_analysis(text: str, metrics: list[Metric], risks: list[str], focus: list[str], thesis: InvestmentThesis) -> str:
+def generate_analysis(
+    text: str, metrics: list[Metric], risks: list[str], focus: list[str], thesis: InvestmentThesis
+) -> tuple[str, str | None]:
     load_dotenv()
     provider = os.getenv("LLM_PROVIDER", "mock").lower()
     api_key = os.getenv("OPENAI_API_KEY")
 
     if provider != "openai" or not api_key:
-        return mock_completion(metrics, risks, focus, thesis)
+        return mock_completion(metrics, risks, focus, thesis), None
 
-    from openai import OpenAI
+    try:
+        from openai import OpenAI
 
-    client = OpenAI(api_key=api_key)
-    response = client.chat.completions.create(
-        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-        messages=[
-            {"role": "system", "content": "你是谨慎、结构化的中文财报和公告分析助手。"},
-            {"role": "user", "content": build_prompt(text, metrics, risks, focus, thesis)},
-        ],
-        temperature=0.2,
-    )
-    return response.choices[0].message.content or ""
+        client = OpenAI(api_key=api_key, timeout=20.0, max_retries=1)
+        response = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": "你是谨慎、结构化的中文财报和公告分析助手。"},
+                {"role": "user", "content": build_prompt(text, metrics, risks, focus, thesis)},
+            ],
+            temperature=0.2,
+        )
+        content = (response.choices[0].message.content or "").strip()[:5000]
+        required_sections = ["初步观点", "看多因素", "看空因素", "后续跟踪", "投研点评"]
+        if not content or not all(section in content for section in required_sections):
+            raise ValueError("模型返回内容缺少必要结构")
+        return content, None
+    except Exception as exc:
+        warning = f"LLM 请求失败（{type(exc).__name__}），以下为规则分析结果。"
+        return mock_completion(metrics, risks, focus, thesis), warning

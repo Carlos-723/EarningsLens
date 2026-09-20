@@ -31,6 +31,28 @@ class MetricExtractionTest(unittest.TestCase):
         self.assertEqual(names["归母净利润"].yoy, "-2.1%")
         self.assertEqual(names["经营活动现金流量净额"].yoy, "-12.3%")
 
+    def test_does_not_treat_growth_rate_as_metric_value(self):
+        metrics = extract_metrics("营业收入同比增长 18.6%，实际金额另见财务报表。")
+        self.assertEqual(metrics, [])
+
+    def test_multiple_metrics_in_one_sentence_keep_their_own_changes(self):
+        text = "2025年营业收入 128.45 亿元，同比增长 18.6%，归母净利润 -2.30 亿元，同比下降 12.3%。"
+        metrics = extract_metrics(text)
+
+        self.assertEqual(len(metrics), 2)
+        self.assertEqual(metrics[0].yoy, "18.6%")
+        self.assertEqual(metrics[1].value, "-2.30")
+        self.assertEqual(metrics[1].yoy, "-12.3%")
+        self.assertEqual(metrics[0].period, "2025年")
+
+    def test_keeps_multiple_periods_and_percentage_points(self):
+        text = "2025年毛利率 35%，同比提升 2.5 个百分点。2024年毛利率 32.5%。"
+        metrics = extract_metrics(text)
+
+        self.assertEqual(len(metrics), 2)
+        self.assertEqual(metrics[0].percentage_point_change, "2.5个百分点")
+        self.assertEqual([item.period for item in metrics], ["2025年", "2024年"])
+
 
 if __name__ == "__main__":
     unittest.main()

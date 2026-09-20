@@ -21,11 +21,14 @@ EarningsLens 是一个面向股票研究、AI 产品、商业分析、数据分�
 
 - 上传 PDF、TXT、MD 格式的财报或公告
 - 自动识别营业收入、归母净利润、毛利率、经营活动现金流量净额、每股收益等指标
-- 提取同比和环比变化信息
+- 提取同比、环比和百分点变化，保留期间、页码、原文位置与置信度
+- 同一指标可保留多期间记录，避免只取第一条造成信息丢失
 - 基于关键词规则识别风险点和管理层关注点
 - 生成股票研究观察：初步观点、看多因素、看空因素、后续跟踪问题
 - 支持 LLM 生成中文结构化摘要、风险点、管理层关注点和 200 字投研点评
 - 未配置 API Key 时自动使用 mock/demo 模式
+- LLM 超时、网络或输出结构异常时自动降级为规则分析
+- 限制上传文件大小、PDF 页数和分析文本长度，并提示扫描版 PDF
 - 可下载 JSON 结构化结果
 
 ## 架构图
@@ -149,10 +152,12 @@ python -m unittest discover -s tests
 
 当前测试覆盖：
 
-- 财务指标、同比、环比抽取
+- 财务指标、同比、环比、百分点和多期间抽取
+- 同句多指标、负数与误匹配防护
 - 风险点和管理层关注点识别
 - 完整分析结果结构
 - 表格格式化输出
+- 空文件和 LLM 请求失败降级
 
 ## 项目结构
 
@@ -164,12 +169,15 @@ EarningsLens/
 │   ├── llm.py
 │   ├── metrics.py
 │   ├── parser.py
-│   └── report.py
+│   ├── report.py
+│   └── thesis.py
 ├── sample_data/
 │   └── sample_announcement.txt
 ├── tests/
 │   ├── test_metrics.py
-│   └── test_report.py
+│   ├── test_report.py
+│   ├── test_resilience.py
+│   └── test_thesis.py
 ├── .env.example
 ├── .gitignore
 ├── README.md

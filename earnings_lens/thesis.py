@@ -9,6 +9,8 @@ from .metrics import Metric
 class InvestmentThesis:
     stance: str
     score: int
+    data_completeness: int
+    confidence: str
     one_line_view: str
     bullish_points: list[str]
     bearish_points: list[str]
@@ -115,6 +117,11 @@ def build_investment_thesis(metrics: list[Metric], risks: list[str], focus: list
     bearish = _dedupe(bearish)[:4]
     questions = _dedupe(questions)[:4]
 
+    score = max(-10, min(10, score))
+    required = [revenue_yoy, profit_yoy, cash_flow_yoy]
+    data_completeness = round(sum(value is not None for value in required) / len(required) * 100)
+    confidence = "高" if data_completeness == 100 else "中" if data_completeness >= 67 else "低"
+
     if score >= 3:
         stance = "偏正面"
         view = "基本面信号偏积极，但仍需要结合估值和同行表现确认股价是否已经反映。"
@@ -128,6 +135,8 @@ def build_investment_thesis(metrics: list[Metric], risks: list[str], focus: list
     return InvestmentThesis(
         stance=stance,
         score=score,
+        data_completeness=data_completeness,
+        confidence=confidence,
         one_line_view=view,
         bullish_points=bullish or ["暂未识别到足够明确的正面信号。"],
         bearish_points=bearish or ["暂未识别到足够明确的负面信号，但仍需结合完整财报核验。"],
@@ -148,4 +157,3 @@ def _dedupe(items: list[str]) -> list[str]:
         seen.add(item)
         result.append(item)
     return result
-

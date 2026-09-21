@@ -42,7 +42,7 @@ METRIC_PATTERN = re.compile(
 VALUE_AFTER_ALIAS_PATTERN = re.compile(
     r"^\s*(?:为|达|达到|实现|录得|合计|was|were|reached|人民币|RMB|CNY|[:：,，])*\s*"
     r"(?P<value>-?\d+(?:,\d{3})*(?:\.\d+)?)\s*"
-    r"(?P<unit>亿元|万元|元|%|百分比|million|billion|bn|m)",
+    r"(?P<unit>亿元|百万元|万元|千元|元/股|元|%|百分比|million|billion|bn|m)",
     re.IGNORECASE,
 )
 YOY_PATTERN = re.compile(r"(同比|year[-\s]?over[-\s]?year|YoY)[^\d\-+]{0,8}(?P<value>[+\-]?\d+(?:\.\d+)?)\s*%", re.IGNORECASE)
@@ -50,6 +50,13 @@ QOQ_PATTERN = re.compile(r"(环比|quarter[-\s]?over[-\s]?quarter|QoQ)[^\d\-+]{0
 PP_PATTERN = re.compile(r"(?:同比|环比)?[^\d\-+]{0,8}(?P<value>[+\-]?\d+(?:\.\d+)?)\s*(?:个)?百分点", re.IGNORECASE)
 PERIOD_PATTERN = re.compile(r"(?:20\d{2}年(?:第?[一二三四1-4]季度|上半年|下半年|年度)?|本报告期|本期|上期)")
 PAGE_PATTERN = re.compile(r"\[第\s*(\d+)\s*页\]")
+NUMBER_PATTERN = r"(?:\([+\-]?\d[\d,]*(?:\.\d+)?\)|[+\-]?\d[\d,]*(?:\.\d+)?)"
+TABLE_METRICS = (
+    ("revenue", r"营业\s*收入"),
+    ("net_profit", r"归属于\s*(?:上市公司|本行|母公司)\s*(?:普通股)?\s*股东的净利\s*润"),
+    ("operating_cash_flow", r"经营活动产生的现金流量净\s*额"),
+    ("eps", r"基本(?:\s*/\s*稀释)?\s*每股收益"),
+)
 
 
 def normalize_text(text: str) -> str:
@@ -111,10 +118,62 @@ def _last_match(pattern: re.Pattern[str], text: str):
     return matches[-1] if matches else None
 
 
+def _number(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith("(") and raw.endswith(")"):
+        return f"-{raw[1:-1].lstrip('+')}"
+    return raw.lstrip("+")
+
+
+def _primary_table_metrics(text: str) -> list[Metric]:
+    start = re.search(r"主要会计数据和财务指标", text)
+    if not start:
+        return []
+    tail = text[start.end() : start.end() + 6000]
+    end = re.search(r"\n\s*(?:（二）|1\.2\s|二、)", tail)
+    section = tail[: end.start()] if end else tail
+    global_unit_match = re.search(r"(?:货币)?单位[：:]\s*(?:人民币)?(百万元|万元|千元|元)", section)
+    global_unit = global_unit_match.group(1) if global_unit_match else None
+    period_match = re.search(r"20\d{2}\s*年\s*1\s*[-－—]\s*3\s*月|本报告期", section)
+    results = []
+
+    for key, label in TABLE_METRICS:
+        pattern = re.compile(
+            rf"(?P<label>{label})\s*(?:[（(](?P<unit>百万元|万元|千元|元/股|元)[）)])?\s*"
+            rf"(?P<current>{NUMBER_PATTERN})\s+(?P<previous>{NUMBER_PATTERN})"
+            rf"(?:\s+(?P<change>\(?[+\-]?\d+(?:\.\d+)?%\)?))?"
+        )
+        match = pattern.search(section)
+        if not match:
+            continue
+        unit = match.group("unit") or global_unit
+        if not unit:
+            continue
+        change = match.group("change")
+        absolute_position = start.end() + match.start()
+        page_match = _last_match(PAGE_PATTERN, text[:absolute_position])
+        results.append(
+            Metric(
+                name=DISPLAY_NAMES[key],
+                value=_number(match.group("current")),
+                unit=unit,
+                yoy=f"{_number(change.replace('%', ''))}%" if change else None,
+                source=re.sub(r"\s+", " ", match.group(0))[:180],
+                period=re.sub(r"\s+", "", period_match.group(0)) if period_match else None,
+                source_position=absolute_position,
+                page=int(page_match.group(1)) if page_match else None,
+                section="主要会计数据和财务指标",
+                confidence=0.99,
+            )
+        )
+    return results
+
+
 def extract_metrics(text: str) -> list[Metric]:
-    """Extract indicators only when a value and unit directly follow the name."""
+    """Extract the primary financial table first, then narrative indicators."""
     normalized = normalize_text(text)
-    results: list[Metric] = []
+    results = _primary_table_metrics(normalized)
+    primary_keys = {metric.name for metric in results}
     seen: set[tuple[str, str, str, str | None]] = set()
 
     for sentence, sentence_start in _sentences_with_positions(normalized):
@@ -122,6 +181,8 @@ def extract_metrics(text: str) -> list[Metric]:
         for index, match in enumerate(matches):
             alias = match.group(0)
             key = ALIAS_TO_KEY[alias.lower()]
+            if DISPLAY_NAMES[key] in primary_keys:
+                continue
             end = matches[index + 1].start() if index + 1 < len(matches) else len(sentence)
             segment = sentence[match.start() : end]
             value_unit = _find_value_after_alias(segment, alias)

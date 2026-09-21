@@ -27,7 +27,11 @@ def _to_float(value: str | None) -> float | None:
 
 
 def _metric_map(metrics: list[Metric]) -> dict[str, Metric]:
-    return {metric.name: metric for metric in metrics}
+    result = {}
+    for metric in metrics:
+        if metric.name not in result or metric.confidence > result[metric.name].confidence:
+            result[metric.name] = metric
+    return result
 
 
 def _yoy(metric: Metric | None) -> float | None:
@@ -118,8 +122,8 @@ def build_investment_thesis(metrics: list[Metric], risks: list[str], focus: list
     questions = _dedupe(questions)[:4]
 
     score = max(-10, min(10, score))
-    required = [revenue_yoy, profit_yoy, cash_flow_yoy]
-    data_completeness = round(sum(value is not None for value in required) / len(required) * 100)
+    required = ["营业收入", "归母净利润", "经营活动现金流量净额"]
+    data_completeness = round(sum(name in metric_by_name for name in required) / len(required) * 100)
     confidence = "高" if data_completeness == 100 else "中" if data_completeness >= 67 else "低"
 
     if score >= 3:

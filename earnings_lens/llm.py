@@ -97,17 +97,26 @@ def generate_analysis(
 ) -> tuple[str, str | None]:
     load_dotenv()
     provider = os.getenv("LLM_PROVIDER", "mock").lower()
-    api_key = os.getenv("OPENAI_API_KEY")
+    if provider == "deepseek":
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        base_url = "https://api.deepseek.com"
+        model = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
+    elif provider == "openai":
+        api_key = os.getenv("OPENAI_API_KEY")
+        base_url = None
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    else:
+        return mock_completion(metrics, risks, focus, thesis), None
 
-    if provider != "openai" or not api_key:
+    if not api_key:
         return mock_completion(metrics, risks, focus, thesis), None
 
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=api_key, timeout=20.0, max_retries=1)
+        client = OpenAI(api_key=api_key, base_url=base_url, timeout=20.0, max_retries=1)
         response = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            model=model,
             messages=[
                 {"role": "system", "content": "你是谨慎、结构化的中文财报和公告分析助手。"},
                 {"role": "user", "content": build_prompt(text, metrics, risks, focus, thesis)},

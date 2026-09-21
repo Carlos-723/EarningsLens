@@ -28,3 +28,32 @@ class ResilienceTest(unittest.TestCase):
 
         self.assertIn("200字投研点评", analysis)
         self.assertIn("LLM 请求失败", warning)
+
+    def test_deepseek_uses_compatible_endpoint(self):
+        captured = {}
+
+        class FakeCompletions:
+            def create(self, **kwargs):
+                captured.update(kwargs)
+                message = types.SimpleNamespace(
+                    content="初步观点\n看多因素\n看空因素\n后续跟踪\n投研点评"
+                )
+                return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+        class FakeOpenAI:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+                self.chat = types.SimpleNamespace(completions=FakeCompletions())
+
+        thesis = build_investment_thesis([], [], [])
+        env = {
+            "LLM_PROVIDER": "deepseek",
+            "DEEPSEEK_API_KEY": "test",
+            "DEEPSEEK_MODEL": "deepseek-flash",
+        }
+        with patch.dict(os.environ, env), patch.dict(sys.modules, {"openai": types.SimpleNamespace(OpenAI=FakeOpenAI)}):
+            _, warning = generate_analysis("测试公告", [], [], [], thesis)
+
+        self.assertEqual(captured["base_url"], "https://api.deepseek.com")
+        self.assertEqual(captured["model"], "deepseek-flash")
+        self.assertIsNone(warning)

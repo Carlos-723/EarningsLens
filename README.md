@@ -97,7 +97,15 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-如需使用真实 LLM：
+如需使用 DeepSeek：
+
+```bash
+LLM_PROVIDER=deepseek
+DEEPSEEK_API_KEY=你的_API_Key
+DEEPSEEK_MODEL=deepseek-flash
+```
+
+或使用 OpenAI：
 
 ```bash
 LLM_PROVIDER=openai
